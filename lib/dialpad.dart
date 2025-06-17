@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 
 class Dialpad extends StatefulWidget {
   final TextEditingController searchController;
@@ -38,24 +39,60 @@ class _DialpadState extends State<Dialpad> {
   }
 
   void _onCallPressed() {
-    // Placeholder for initiating a call
-    // Requires 'url_launcher' and permissions for actual implementation
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Initiate Call'),
-        content: Text('Calling: $_dialedNumber'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('OK'),
-          ),
-        ],
-      ),
+      builder: (context) {
+        final theme = Theme.of(context);
+        return AlertDialog(
+          title: Text('Initiate Call', style: theme.textTheme.titleLarge),
+          content: Text('Calling: $_dialedNumber', style: theme.textTheme.bodyMedium),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('OK', style: TextStyle(color: theme.colorScheme.primary)),
+            ),
+          ],
+        );
+      },
     );
-    // For actual calling, use:
-    // import 'package:url_launcher/url_launcher.dart';
-    // launchUrl(Uri.parse('tel:$_dialedNumber'));
+  }
+
+  void _showContactDialog(Contact contact) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final theme = Theme.of(context);
+        return AlertDialog(
+          title: Text(
+            contact.displayName ?? '',
+            style: theme.textTheme.titleLarge,
+          ),
+          content: Row(
+            children: [
+              Icon(
+                Icons.phone,
+                size: 20.0,
+                color: theme.colorScheme.onSurface,
+              ),
+              const SizedBox(width: 8.0),
+              Expanded(
+                child: Text(
+                  contact.phones.isNotEmpty ? contact.phones.first.number : 'No number',
+                  style: theme.textTheme.bodyMedium,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Close', style: TextStyle(color: theme.colorScheme.primary)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -68,7 +105,6 @@ class _DialpadState extends State<Dialpad> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Display dialed number
           Container(
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             alignment: Alignment.center,
@@ -81,7 +117,6 @@ class _DialpadState extends State<Dialpad> {
               ),
             ),
           ),
-          // Dialpad grid
           GridView.count(
             crossAxisCount: 3,
             shrinkWrap: true,
@@ -104,7 +139,6 @@ class _DialpadState extends State<Dialpad> {
             ],
           ),
           const SizedBox(height: 5.0),
-          // Action buttons
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -112,7 +146,6 @@ class _DialpadState extends State<Dialpad> {
                 icon: Icon(Icons.call, color: Colors.green, size: 36.0),
                 onPressed: _dialedNumber.isEmpty ? null : _onCallPressed,
               ),
-
               IconButton(
                 icon: Icon(Icons.close, color: theme.colorScheme.onSurface, size: 36.0),
                 onPressed: widget.onClose,
