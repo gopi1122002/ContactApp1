@@ -231,27 +231,32 @@ class _MyContactState extends State<MyContact> {
             sanitizeString(contact.displayName),
             style: theme.textTheme.titleLarge,
           ),
-          content: Row(
-            children: [
-              Icon(
-                Icons.phone,
-                size: 20.0,
-                color: theme.colorScheme.onSurface,
-              ),
-              const SizedBox(width: 8.0),
-              Expanded(
-                child: Text(
-                  contact.phones.isNotEmpty ? sanitizeString(contact.phones.first.number) : 'No number',
-                  style: theme.textTheme.bodyMedium,
-                  overflow: TextOverflow.ellipsis,
+          content: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.8, // Set width to 80% of screen width
+            height: 100.0, // Increase height for larger dialog
+            child: Row(
+              children: [
+                Icon(
+                  Icons.phone,
+                  size: 40.0, // Slightly larger icon for better visibility
+                  color: theme.colorScheme.onSurface,
                 ),
-              ),
-            ],
+                const SizedBox(width: 12.0), // Slightly increased spacing
+                Expanded(
+                  child: Text(
+                    contact.phones.isNotEmpty ? sanitizeString(contact.phones.first.number) : 'No number',
+                    style: theme.textTheme.bodyLarge, // Use larger text style
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
+          contentPadding: const EdgeInsets.all(24.0), // Increase padding for spacious feel
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Close', style: TextStyle(color: theme.colorScheme.primary)),
+              child: Text('Close', style: TextStyle(color: theme.colorScheme.primary, fontSize: 16.0)), // Larger text
             ),
           ],
         );
