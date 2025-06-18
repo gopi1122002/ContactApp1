@@ -22,6 +22,11 @@ enum ContactDisplayLevel {
   level3,
 }
 
+enum IndexBarColorMode {
+  transparent,
+  multicolor,
+}
+
 class MyContact extends StatefulWidget {
   const MyContact({super.key, required this.title});
   final String title;
@@ -40,12 +45,14 @@ class _MyContactState extends State<MyContact> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   ContactDisplayLevel _displayLevel = ContactDisplayLevel.level1;
+  IndexBarColorMode _indexBarColorMode = IndexBarColorMode.multicolor;
 
   @override
   void initState() {
     super.initState();
     _fetchContacts();
     _loadDisplayLevel();
+    _loadIndexBarColorMode();
 
     _scrollController.addListener(() {
       double offset = _scrollController.offset;
@@ -72,9 +79,27 @@ class _MyContactState extends State<MyContact> {
     _searchController.addListener(_filterContacts);
   }
 
+  Future<void> _loadIndexBarColorMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final modeString = prefs.getString('index_bar_color_mode') ?? 'multicolor';
+    setState(() {
+      _indexBarColorMode = IndexBarColorMode.values.firstWhere(
+            (e) => e.toString().split('.').last == modeString,
+        orElse: () => IndexBarColorMode.multicolor,
+      );
+    });
+  }
+
+  Future<void> _setIndexBarColorMode(IndexBarColorMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('index_bar_color_mode', mode.toString().split('.').last);
+    setState(() {
+      _indexBarColorMode = mode;
+    });
+  }
+
   void _filterContacts() {
     final query = _searchController.text.toLowerCase().trim();
-    print('Filtering: $query'); // Debug
     setState(() {
       if (query.isNotEmpty) {
         _filteredContacts = _contacts.where((contact) {
@@ -173,7 +198,8 @@ class _MyContactState extends State<MyContact> {
       _selectedLetter = null;
       _searchController.clear();
       _filteredContacts = [];
-    });
+    }
+    );
 
     try {
       var status = await Permission.contacts.status;
@@ -189,8 +215,6 @@ class _MyContactState extends State<MyContact> {
       }
 
       final contacts = await FlutterContacts.getContacts(withProperties: true);
-      print('Fetched contacts: ${contacts.map((c) => c.displayName).toList()}'); // Debug
-
       List<ContactModel> items = contacts.map((c) {
         String tag = c.displayName.isNotEmpty ? sanitizeString(c.displayName)[0].toUpperCase() : '';
         if (!RegExp(r'[A-Z]').hasMatch(tag)) return null;
@@ -212,12 +236,13 @@ class _MyContactState extends State<MyContact> {
         _indexBarData = availableTags;
         _isLoading = false;
       });
-    } catch (e) {
+    }
+    catch (e) {
       setState(() {
         _errorMessage = 'Error fetching contacts: $e';
         _isLoading = false;
-      });
-      print('Fetch error: $e'); // Debug
+      }
+      );
     }
   }
 
@@ -226,39 +251,54 @@ class _MyContactState extends State<MyContact> {
       context: context,
       builder: (context) {
         final theme = Theme.of(context);
-        return AlertDialog(
-          title: Text(
-            sanitizeString(contact.displayName),
-            style: theme.textTheme.titleLarge,
-          ),
-          content: SizedBox(
-            width: MediaQuery.of(context).size.width * 0.8, // Set width to 80% of screen width
-            height: 100.0, // Increase height for larger dialog
-            child: Row(
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.8,
+            height: 200.0,
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.phone,
-                  size: 40.0, // Slightly larger icon for better visibility
-                  color: theme.colorScheme.onSurface,
+                Text(
+                  sanitizeString(contact.displayName),
+                  style: theme.textTheme.titleLarge,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(width: 12.0), // Slightly increased spacing
-                Expanded(
-                  child: Text(
-                    contact.phones.isNotEmpty ? sanitizeString(contact.phones.first.number) : 'No number',
-                    style: theme.textTheme.bodyLarge, // Use larger text style
-                    overflow: TextOverflow.ellipsis,
+                const SizedBox(height: 16.0),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.phone,
+                      size: 20.0,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    const SizedBox(width: 8.0),
+                    Expanded(
+                      child: Text(
+                        contact.phones.isNotEmpty ? sanitizeString(contact.phones.first.number) : 'No number',
+                        style: theme.textTheme.bodyMedium,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Close', style: TextStyle(color: theme.colorScheme.primary)),
                   ),
                 ),
               ],
             ),
           ),
-          contentPadding: const EdgeInsets.all(24.0), // Increase padding for spacious feel
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Close', style: TextStyle(color: theme.colorScheme.primary, fontSize: 16.0)), // Larger text
-            ),
-          ],
         );
       },
     );
@@ -375,12 +415,19 @@ class _MyContactState extends State<MyContact> {
               ),
               subtitle: Row(
                 children: [
-                  Icon(
-                    Icons.phone,
-                    size: 16.0,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                  const SizedBox(width: 8.0),
+                  if (contact.contact.phones.isNotEmpty) ...[
+                    Text(
+                      ' ',
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface),
+                    ),
+                    const SizedBox(width: 4.0),
+                    Icon(
+                      contact.contact.displayName.isNotEmpty ? Icons.phone : Icons.public,
+                      size: 16.0,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    const SizedBox(width: 4.0),
+                  ],
                   Expanded(
                     child: Text(
                       contact.contact.phones.isNotEmpty
@@ -505,6 +552,7 @@ class _MyContactState extends State<MyContact> {
                       _scrollController.jumpTo(0.0);
                     }
                   },
+                  colorMode: _indexBarColorMode,
                 ),
               ),
             ],
@@ -547,31 +595,100 @@ class _MyContactState extends State<MyContact> {
                           (e) => e.toString().split('.').last == value,
                     );
                     _saveDisplayLevel(level);
+                  } else if (value == 'transparent_index_bar') {
+                    _setIndexBarColorMode(IndexBarColorMode.transparent);
+                  } else if (value == 'multicolor_index_bar') {
+                    _setIndexBarColorMode(IndexBarColorMode.multicolor);
                   }
                 },
+                constraints: const BoxConstraints(maxWidth: 200.0),
+                padding: EdgeInsets.zero,
                 itemBuilder: (context) => [
                   PopupMenuItem(
-                    value: 'toggle_theme',
-                    child: ListTile(
-                      leading: Icon(
-                        themeProvider.isDarkMode ? Icons.wb_sunny : Icons.nightlight_round,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                      title: Text(themeProvider.isDarkMode ? 'Light Mode' : 'Dark Mode'),
+                    value: 'transparent_index_bar',
+                    height: 40.0,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.opacity,
+                          color: theme.colorScheme.onSurface,
+                          size: 20.0,
+                        ),
+                        const SizedBox(width: 8.0),
+                        Expanded(
+                          child: Text(
+                            'Transparent${_indexBarColorMode == IndexBarColorMode.transparent ? ' (Current)' : ''}',
+                            style: const TextStyle(fontSize: 14.0),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 'multicolor_index_bar',
+                    height: 40.0,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.color_lens,
+                          color: theme.colorScheme.onSurface,
+                          size: 20.0,
+                        ),
+                        const SizedBox(width: 8.0),
+                        Expanded(
+                          child: Text(
+                            'Multicolor${_indexBarColorMode == IndexBarColorMode.multicolor ? ' (Current)' : ''}',
+                            style: const TextStyle(fontSize: 14.0),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuDivider(height: 8.0),
+                  PopupMenuItem(
+                    value: 'toggle_theme',
+                    height: 40.0,
+                    child: Row(
+                      children: [
+                        Icon(
+                          themeProvider.isDarkMode ? Icons.wb_sunny : Icons.nightlight_round,
+                          color: theme.colorScheme.onSurface,
+                          size: 20.0,
+                        ),
+                        const SizedBox(width: 8.0),
+                        Expanded(
+                          child: Text(
+                            themeProvider.isDarkMode ? 'Light Mode' : 'Dark Mode',
+                            style: const TextStyle(fontSize: 14.0),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuDivider(height: 8.0),
                   PopupMenuItem(
                     value: 'level1',
-                    child: Text('Display Level 1${_displayLevel == ContactDisplayLevel.level1 ? ' (Current)' : ''}'),
+                    height: 40.0,
+                    child: Text(
+                      'Display 1${_displayLevel == ContactDisplayLevel.level1 ? ' (Current)' : ''}',
+                      style: const TextStyle(fontSize: 14.0),
+                    ),
                   ),
                   PopupMenuItem(
                     value: 'level2',
-                    child: Text('Display Level 2${_displayLevel == ContactDisplayLevel.level2 ? ' (Current)' : ''}'),
+                    height: 40.0,
+                    child: Text(
+                      'Display 2${_displayLevel == ContactDisplayLevel.level2 ? ' (Current)' : ''}',
+                      style: const TextStyle(fontSize: 14.0),
+                    ),
                   ),
                   PopupMenuItem(
                     value: 'level3',
-                    child: Text('Display Level 3${_displayLevel == ContactDisplayLevel.level3 ? ' (Current)' : ''}'),
+                    height: 40.0,
+                    child: Text(
+                      'Display 3${_displayLevel == ContactDisplayLevel.level3 ? ' (Current)' : ''}',
+                      style: const TextStyle(fontSize: 14.0),
+                    ),
                   ),
                 ],
               ),

@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'shared.dart';
+import 'contact.dart'; // Import for IndexBarColorMode enum
 
 class CustomIndexBar extends StatefulWidget {
   final List<String> indexBarData;
   final ScrollController scrollController;
   final Function(String) onLetterSelected;
+  final IndexBarColorMode colorMode;
 
   const CustomIndexBar({
     super.key,
     required this.indexBarData,
     required this.scrollController,
     required this.onLetterSelected,
+    required this.colorMode,
   });
 
   @override
@@ -23,6 +26,7 @@ class _CustomIndexBarState extends State<CustomIndexBar> {
   OverlayEntry? _overlayEntry;
   String? _currentHintLetter;
   final GlobalKey _indexBarKey = GlobalKey();
+  final ScrollController indexBarScrollController = ScrollController(); // Moved to class level
 
   void _scrollToLetter(String letter) {
     final now = DateTime.now();
@@ -105,7 +109,6 @@ class _CustomIndexBarState extends State<CustomIndexBar> {
 
   @override
   Widget build(BuildContext context) {
-    final ScrollController indexBarScrollController = ScrollController();
     const double heightPerLetter = 54.0;
     final theme = Theme.of(context);
 
@@ -212,7 +215,6 @@ class _CustomIndexBarState extends State<CustomIndexBar> {
                   final adjustedPosition = localPosition.dy + indexBarScrollController.offset;
                   final index = (adjustedPosition / heightPerLetter).clamp(0, widget.indexBarData.length - 1).toInt();
                   final selectedLetter = widget.indexBarData[index];
-
                   final letterTop = index * heightPerLetter;
                   final viewportHeight = box.size.height;
                   final targetOffset = (letterTop - (viewportHeight / 2) + (heightPerLetter / 2)).clamp(0.0, indexBarScrollController.position.maxScrollExtent);
@@ -245,7 +247,9 @@ class _CustomIndexBarState extends State<CustomIndexBar> {
                   alignment: Alignment.center,
                   margin: const EdgeInsets.symmetric(vertical: 4.0),
                   decoration: BoxDecoration(
-                    color: letterColors[letter]?.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.1) ?? theme.colorScheme.surface,
+                    color: widget.colorMode == IndexBarColorMode.transparent
+                        ? Colors.transparent
+                        : (letterColors[letter]?.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.1) ?? theme.colorScheme.surface),
                     shape: BoxShape.circle,
                   ),
                   child: Text(
@@ -267,6 +271,8 @@ class _CustomIndexBarState extends State<CustomIndexBar> {
 
   @override
   void dispose() {
+    indexBarScrollController.dispose();
+    _removeIndexHint();
     super.dispose();
   }
 }
