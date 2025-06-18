@@ -137,11 +137,11 @@ class _MyContactState extends State<MyContact> {
   double _getContactHeight() {
     switch (_displayLevel) {
       case ContactDisplayLevel.level1:
-        return 80.0;
-      case ContactDisplayLevel.level2:
         return 90.0;
-      case ContactDisplayLevel.level3:
+      case ContactDisplayLevel.level2:
         return 100.0;
+      case ContactDisplayLevel.level3:
+        return 110.0;
     }
   }
 
@@ -180,6 +180,39 @@ class _MyContactState extends State<MyContact> {
     }
   }
 
+  TextStyle _getContactTextStyle(BuildContext context, {required bool isName}) {
+    final theme = Theme.of(context);
+    switch (_displayLevel) {
+      case ContactDisplayLevel.level1:
+        return isName
+            ? theme.textTheme.bodyLarge?.copyWith(
+          fontSize: 16.0,
+          fontWeight: FontWeight.normal,
+        ) ??
+            const TextStyle(fontSize: 16.0, fontWeight: FontWeight.normal)
+            : theme.textTheme.bodyMedium?.copyWith(fontSize: 14.0) ??
+            const TextStyle(fontSize: 14.0);
+      case ContactDisplayLevel.level2:
+        return isName
+            ? theme.textTheme.bodyLarge?.copyWith(
+          fontSize: 18.0,
+          fontWeight: FontWeight.normal,
+        ) ??
+            const TextStyle(fontSize: 18.0, fontWeight: FontWeight.normal)
+            : theme.textTheme.bodyMedium?.copyWith(fontSize: 16.0) ??
+            const TextStyle(fontSize: 16.0);
+      case ContactDisplayLevel.level3:
+        return isName
+            ? theme.textTheme.bodyLarge?.copyWith(
+          fontSize: 20.0,
+          fontWeight: FontWeight.normal,
+        ) ??
+            const TextStyle(fontSize: 20.0, fontWeight: FontWeight.normal)
+            : theme.textTheme.bodyMedium?.copyWith(fontSize: 18.0) ??
+            const TextStyle(fontSize: 18.0);
+    }
+  }
+
   EdgeInsets _getContactPadding() {
     switch (_displayLevel) {
       case ContactDisplayLevel.level1:
@@ -198,8 +231,7 @@ class _MyContactState extends State<MyContact> {
       _selectedLetter = null;
       _searchController.clear();
       _filteredContacts = [];
-    }
-    );
+    });
 
     try {
       var status = await Permission.contacts.status;
@@ -221,7 +253,8 @@ class _MyContactState extends State<MyContact> {
         return ContactModel(contact: c, tag: tag, key: GlobalKey());
       }).whereType<ContactModel>().toList();
 
-      items.sort((a, b) => sanitizeString(a.contact.displayName).toLowerCase().compareTo(sanitizeString(b.contact.displayName).toLowerCase()));
+      items.sort((a, b) => sanitizeString(a.contact.displayName).toLowerCase()
+          .compareTo(sanitizeString(b.contact.displayName).toLowerCase()));
 
       final allTags = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
       final availableTags = <String>[];
@@ -236,13 +269,11 @@ class _MyContactState extends State<MyContact> {
         _indexBarData = availableTags;
         _isLoading = false;
       });
-    }
-    catch (e) {
+    } catch (e) {
       setState(() {
         _errorMessage = 'Error fetching contacts: $e';
         _isLoading = false;
-      }
-      );
+      });
     }
   }
 
@@ -281,7 +312,9 @@ class _MyContactState extends State<MyContact> {
                     const SizedBox(width: 8.0),
                     Expanded(
                       child: Text(
-                        contact.phones.isNotEmpty ? sanitizeString(contact.phones.first.number) : 'No number',
+                        contact.phones.isNotEmpty
+                            ? sanitizeString(contact.phones.first.number)
+                            : 'No number',
                         style: theme.textTheme.bodyMedium,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -293,7 +326,8 @@ class _MyContactState extends State<MyContact> {
                   alignment: Alignment.bottomRight,
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text('Close', style: TextStyle(color: theme.colorScheme.primary)),
+                    child: Text('Close',
+                        style: TextStyle(color: theme.colorScheme.primary)),
                   ),
                 ),
               ],
@@ -317,6 +351,50 @@ class _MyContactState extends State<MyContact> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
       ),
+    );
+  }
+
+  void _showInfoDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final theme = Theme.of(context);
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.8,
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Version',
+                  style: theme.textTheme.titleLarge,
+                ),
+                const SizedBox(height: 16.0),
+                Text(
+                  'v 1.1',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16.0),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Close',
+                        style: TextStyle(color: theme.colorScheme.primary)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -364,7 +442,9 @@ class _MyContactState extends State<MyContact> {
       );
     }
 
-    final displayContacts = _filteredContacts.isEmpty && _searchController.text.isEmpty ? _contacts : _filteredContacts;
+    final displayContacts = _filteredContacts.isEmpty && _searchController.text.isEmpty
+        ? _contacts
+        : _filteredContacts;
 
     if (_searchController.text.isNotEmpty && _filteredContacts.isEmpty) {
       return Center(
@@ -398,7 +478,8 @@ class _MyContactState extends State<MyContact> {
             child: ListTile(
               key: contact.key,
               leading: CircleAvatar(
-                backgroundColor: letterColors[contact.tag] ?? theme.colorScheme.primary,
+                backgroundColor:
+                letterColors[contact.tag] ?? theme.colorScheme.primary,
                 radius: _getAvatarRadius(),
                 child: Text(
                   sanitizeString(contact.contact.displayName).isNotEmpty
@@ -411,19 +492,22 @@ class _MyContactState extends State<MyContact> {
                 sanitizeString(contact.contact.displayName),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
-                style: theme.textTheme.bodyLarge,
+                style: _getContactTextStyle(context, isName: true),
               ),
               subtitle: Row(
                 children: [
                   if (contact.contact.phones.isNotEmpty) ...[
                     Text(
                       ' ',
-                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface),
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.colorScheme.onSurface),
                     ),
                     const SizedBox(width: 4.0),
                     Icon(
-                      contact.contact.displayName.isNotEmpty ? Icons.phone : Icons.public,
-                      size: 16.0,
+                      contact.contact.displayName.isNotEmpty
+                          ? Icons.phone
+                          : Icons.public,
+                      size: 18.0,
                       color: theme.colorScheme.onSurface,
                     ),
                     const SizedBox(width: 4.0),
@@ -435,7 +519,7 @@ class _MyContactState extends State<MyContact> {
                           : 'No number',
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
-                      style: theme.textTheme.bodyMedium,
+                      style: _getContactTextStyle(context, isName: false),
                     ),
                   ),
                 ],
@@ -455,7 +539,8 @@ class _MyContactState extends State<MyContact> {
             controller: _searchController,
             decoration: InputDecoration(
               hintText: 'Search contacts',
-              hintStyle: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.6)),
+              hintStyle:
+              TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.6)),
               prefixIcon: Icon(Icons.search, color: theme.colorScheme.onSurface),
               suffixIcon: IconButton(
                 icon: Icon(Icons.dialpad, color: theme.colorScheme.onSurface),
@@ -467,15 +552,18 @@ class _MyContactState extends State<MyContact> {
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8.0),
-                borderSide: BorderSide(color: theme.colorScheme.onSurface.withOpacity(0.3)),
+                borderSide: BorderSide(
+                    color: theme.colorScheme.onSurface.withOpacity(0.3)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8.0),
-                borderSide: BorderSide(color: theme.colorScheme.primary, width: 2.0),
+                borderSide:
+                BorderSide(color: theme.colorScheme.primary, width: 2.0),
               ),
               filled: true,
               fillColor: theme.colorScheme.surface,
-              contentPadding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 16.0),
+              contentPadding:
+              const EdgeInsets.symmetric(vertical: 14.0, horizontal: 16.0),
             ),
             style: theme.textTheme.bodyMedium,
             onChanged: (value) => _filterContacts(),
@@ -499,7 +587,8 @@ class _MyContactState extends State<MyContact> {
                   indexBarData: _indexBarData,
                   scrollController: _scrollController,
                   onLetterSelected: (letter) {
-                    int targetIndex = displayContacts.indexWhere((contact) => contact.tag == letter);
+                    int targetIndex =
+                    displayContacts.indexWhere((contact) => contact.tag == letter);
                     if (targetIndex == -1) {
                       final allLetters = ['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
                       final currentIndex = allLetters.indexOf(letter);
@@ -521,7 +610,8 @@ class _MyContactState extends State<MyContact> {
                       }
 
                       if (closestLetter != null) {
-                        targetIndex = displayContacts.indexWhere((contact) => contact.tag == closestLetter);
+                        targetIndex = displayContacts
+                            .indexWhere((contact) => contact.tag == closestLetter);
                       }
                     }
 
@@ -571,22 +661,18 @@ class _MyContactState extends State<MyContact> {
 
         return Scaffold(
           appBar: AppBar(
-            leading: Padding(
-              padding: const EdgeInsets.only(left: 18.0),
-              child: IconButton(
-                icon: Icon(Icons.refresh, color: theme.colorScheme.onPrimary, size: 25.0),
-                onPressed: _fetchContacts,
-              ),
-            ),
             centerTitle: true,
-            title: Text(
-              widget.title,
-              style: TextStyle(color: theme.colorScheme.onPrimary),
+            title: GestureDetector(
+              onTap: _fetchContacts,
+              child: Text(
+                widget.title,
+                style: TextStyle(color: theme.colorScheme.onPrimary),
+              ),
             ),
             backgroundColor: theme.colorScheme.primary,
             actions: [
               PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert, color: theme.colorScheme.onPrimary),
+                icon: Icon(Icons.sort, color: theme.colorScheme.onPrimary),
                 onSelected: (value) {
                   if (value == 'toggle_theme') {
                     themeProvider.toggleTheme(!themeProvider.isDarkMode);
@@ -599,26 +685,35 @@ class _MyContactState extends State<MyContact> {
                     _setIndexBarColorMode(IndexBarColorMode.transparent);
                   } else if (value == 'multicolor_index_bar') {
                     _setIndexBarColorMode(IndexBarColorMode.multicolor);
+                  } else if (value == 'info') {
+                    _showInfoDialog();
                   }
                 },
-                constraints: const BoxConstraints(maxWidth: 200.0),
+                constraints: const BoxConstraints(maxWidth: 300.0), // Increased from 200.0
                 padding: EdgeInsets.zero,
                 itemBuilder: (context) => [
                   PopupMenuItem(
                     value: 'transparent_index_bar',
-                    height: 40.0,
+                    height: 48.0, // Increased from 40.0
                     child: Row(
                       children: [
                         Icon(
                           Icons.opacity,
-                          color: theme.colorScheme.onSurface,
-                          size: 20.0,
+                          color: _indexBarColorMode == IndexBarColorMode.transparent
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurface,
+                          size: 22.0, // Increased from 20.0
                         ),
                         const SizedBox(width: 8.0),
                         Expanded(
                           child: Text(
-                            'Transparent${_indexBarColorMode == IndexBarColorMode.transparent ? ' (Current)' : ''}',
-                            style: const TextStyle(fontSize: 14.0),
+                            'Transparent',
+                            style: TextStyle(
+                              fontSize: 16.0, // Increased from 14.0
+                              color: _indexBarColorMode == IndexBarColorMode.transparent
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onSurface,
+                            ),
                           ),
                         ),
                       ],
@@ -626,19 +721,26 @@ class _MyContactState extends State<MyContact> {
                   ),
                   PopupMenuItem(
                     value: 'multicolor_index_bar',
-                    height: 40.0,
+                    height: 48.0, // Increased from 40.0
                     child: Row(
                       children: [
                         Icon(
                           Icons.color_lens,
-                          color: theme.colorScheme.onSurface,
-                          size: 20.0,
+                          color: _indexBarColorMode == IndexBarColorMode.multicolor
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurface,
+                          size: 22.0, // Increased from 20.0
                         ),
                         const SizedBox(width: 8.0),
                         Expanded(
                           child: Text(
-                            'Multicolor${_indexBarColorMode == IndexBarColorMode.multicolor ? ' (Current)' : ''}',
-                            style: const TextStyle(fontSize: 14.0),
+                            'Multicolor',
+                            style: TextStyle(
+                              fontSize: 16.0, // Increased from 14.0
+                              color: _indexBarColorMode == IndexBarColorMode.multicolor
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onSurface,
+                            ),
                           ),
                         ),
                       ],
@@ -647,19 +749,19 @@ class _MyContactState extends State<MyContact> {
                   const PopupMenuDivider(height: 8.0),
                   PopupMenuItem(
                     value: 'toggle_theme',
-                    height: 40.0,
+                    height: 48.0, // Increased from 40.0
                     child: Row(
                       children: [
                         Icon(
                           themeProvider.isDarkMode ? Icons.wb_sunny : Icons.nightlight_round,
                           color: theme.colorScheme.onSurface,
-                          size: 20.0,
+                          size: 22.0, // Increased from 20.0
                         ),
                         const SizedBox(width: 8.0),
                         Expanded(
                           child: Text(
                             themeProvider.isDarkMode ? 'Light Mode' : 'Dark Mode',
-                            style: const TextStyle(fontSize: 14.0),
+                            style: const TextStyle(fontSize: 16.0), // Increased from 14.0
                           ),
                         ),
                       ],
@@ -668,26 +770,62 @@ class _MyContactState extends State<MyContact> {
                   const PopupMenuDivider(height: 8.0),
                   PopupMenuItem(
                     value: 'level1',
-                    height: 40.0,
+                    height: 48.0, // Increased from 40.0
                     child: Text(
-                      'Display 1${_displayLevel == ContactDisplayLevel.level1 ? ' (Current)' : ''}',
-                      style: const TextStyle(fontSize: 14.0),
+                      'Display 1',
+                      style: TextStyle(
+                        fontSize: 16.0, // Increased from 14.0
+                        color: _displayLevel == ContactDisplayLevel.level1
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface,
+                      ),
                     ),
                   ),
                   PopupMenuItem(
                     value: 'level2',
-                    height: 40.0,
+                    height: 48.0, // Increased from 40.0
                     child: Text(
-                      'Display 2${_displayLevel == ContactDisplayLevel.level2 ? ' (Current)' : ''}',
-                      style: const TextStyle(fontSize: 14.0),
+                      'Display 2',
+                      style: TextStyle(
+                        fontSize: 16.0, // Increased from 14.0
+                        color: _displayLevel == ContactDisplayLevel.level2
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface,
+                      ),
                     ),
                   ),
                   PopupMenuItem(
                     value: 'level3',
-                    height: 40.0,
+                    height: 48.0, // Increased from 40.0
                     child: Text(
-                      'Display 3${_displayLevel == ContactDisplayLevel.level3 ? ' (Current)' : ''}',
-                      style: const TextStyle(fontSize: 14.0),
+                      'Display 3',
+                      style: TextStyle(
+                        fontSize: 16.0, // Increased from 14.0
+                        color: _displayLevel == ContactDisplayLevel.level3
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                  const PopupMenuDivider(height: 8.0),
+                  PopupMenuItem(
+                    value: 'info',
+                    height: 48.0, // Increased from 40.0
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info,
+                          color: theme.colorScheme.onSurface,
+                          size: 22.0, // Increased from 20.0
+                        ),
+                        const SizedBox(width: 8.0),
+                        Expanded(
+                          child: Text(
+                            'Info',
+                            style: const TextStyle(fontSize: 16.0), // Increased from 14.0
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
