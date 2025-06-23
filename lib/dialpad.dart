@@ -109,7 +109,7 @@ class _DialpadState extends State<Dialpad> {
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             alignment: Alignment.center,
             child: Text(
-              _dialedNumber.isEmpty ? 'Enter number' : _dialedNumber,
+              _dialedNumber.isEmpty ? '' : _dialedNumber,
               style: theme.textTheme.titleLarge?.copyWith(
                 color: _dialedNumber.isEmpty
                     ? theme.colorScheme.onSurface.withOpacity(0.6)
@@ -167,8 +167,9 @@ class _DialpadState extends State<Dialpad> {
       onTap: () => _onDigitPressed(digit),
       child: Container(
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: theme.colorScheme.secondary.withOpacity(0.1),
+          // shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(50.0),
+          color: theme.colorScheme.secondary.withOpacity(0.2),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

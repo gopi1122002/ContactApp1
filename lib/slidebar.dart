@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'contact.dart';
 import 'shared.dart';
-import 'contact.dart'; // Import for IndexBarColorMode enum
 
 class CustomIndexBar extends StatefulWidget {
   final List<String> indexBarData;
@@ -26,7 +26,7 @@ class _CustomIndexBarState extends State<CustomIndexBar> {
   OverlayEntry? _overlayEntry;
   String? _currentHintLetter;
   final GlobalKey _indexBarKey = GlobalKey();
-  final ScrollController indexBarScrollController = ScrollController(); // Moved to class level
+  final ScrollController indexBarScrollController = ScrollController();
 
   void _scrollToLetter(String letter) {
     final now = DateTime.now();
@@ -249,7 +249,8 @@ class _CustomIndexBarState extends State<CustomIndexBar> {
                   decoration: BoxDecoration(
                     color: widget.colorMode == IndexBarColorMode.transparent
                         ? Colors.transparent
-                        : (letterColors[letter]?.withOpacity(theme.brightness == Brightness.dark ? 0.3 : 0.1) ?? theme.colorScheme.surface),
+                        : (letterColors[letter]?.withOpacity(theme.brightness == Brightness.light ? 0.4 : 0.6)
+                        ?? theme.colorScheme.secondary.withOpacity(0.3)),
                     shape: BoxShape.circle,
                   ),
                   child: Text(

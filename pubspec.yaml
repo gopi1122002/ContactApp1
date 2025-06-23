@@ -38,6 +38,12 @@ dependencies:
   permission_handler: ^11.3.1
   provider: ^6.0.0
   shared_preferences: ^2.0.15
+  image_picker: ^1.1.2
+  device_info_plus: ^10.1.0
+  url_launcher: ^6.2.4
+  intl_phone_field: ^3.2.0
+
+
 
 
 
@@ -66,7 +72,7 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
-    - assets/images/images.jpg
+    - assets/images/no_contacts.png
 
 
 
