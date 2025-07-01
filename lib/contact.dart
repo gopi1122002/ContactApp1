@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:android_intent_plus/android_intent.dart';
 import 'slidebar.dart';
 import 'Theme.dart';
 import 'shared.dart';
@@ -377,31 +379,125 @@ class _MyContactState extends State<MyContact> {
   }
 
   Future<void> _makeCall(ContactModel contact) async {
+    // Directly attempt to open the dialer
+    await _initiateCall(contact);
+  }
+
+  Future<void> _initiateCall(ContactModel contact) async {
     if (contact.contact.phones.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('No phone number available')),
         );
       }
+      print('No phone number available for contact: ${contact.contact.displayName}');
       return;
     }
 
-    final phoneNumber = sanitizeString(contact.contact.phones.first.number).replaceAll(RegExp(r'[^\d+]'), '');
-    final Uri uri = Uri.parse('tel:$phoneNumber');
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
-      } else {
+    String? phoneNumber;
+    if (contact.contact.phones.length > 1) {
+      phoneNumber = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Select a number for ${contact.contact.displayName}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: contact.contact.phones
+                  .map((phone) => ListTile(
+                title: Text(phone.number),
+                onTap: () => Navigator.pop(context, phone.number),
+              ))
+                  .toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+      if (phoneNumber == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not initiate call')),
+            const SnackBar(content: Text('Call cancelled')),
           );
         }
+        print('Call cancelled by user');
+        return;
       }
-    } catch (e) {
+    } else {
+      phoneNumber = contact.contact.phones.first.number;
+    }
+
+    // Sanitize to keep digits, +, -, (), and spaces
+    final sanitizedNumber = phoneNumber.replaceAll(RegExp(r'[^\d+()\s-]'), '');
+    // Minimal validation: at least 3 digits
+    if (sanitizedNumber.isEmpty || !RegExp(r'^\+?\d{3,}$').hasMatch(sanitizedNumber.replaceAll(RegExp(r'[()\s-]'), ''))) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error initiating call: $e')),
+          SnackBar(content: Text('Invalid phone number format: $sanitizedNumber')),
+        );
+      }
+      print('Invalid phone number format: $sanitizedNumber');
+      return;
+    }
+
+    try {
+      if (Platform.isAndroid) {
+        // Try AndroidIntent first
+        final intent = AndroidIntent(
+          action: 'android.intent.action.DIAL',
+          data: Uri(scheme: 'tel', path: sanitizedNumber).toString(),
+        );
+        print('Launching Android intent: action=DIAL, data=$sanitizedNumber');
+        try {
+          await intent.launch();
+          print('Dialer opened successfully with AndroidIntent for $sanitizedNumber');
+        } catch (e) {
+          print('AndroidIntent failed: $e');
+          // Fallback to url_launcher
+          final uri = Uri(scheme: 'tel', path: sanitizedNumber);
+          print('Falling back to url_launcher: $uri');
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+            print('Dialer opened successfully with url_launcher for $sanitizedNumber');
+          } else {
+            print('Cannot launch dialer URI: $uri');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Unable to open dialer. Please ensure a phone app is installed.'),
+                ),
+              );
+            }
+          }
+        }
+      } else {
+        // iOS: Use url_launcher
+        final uri = Uri(scheme: 'tel', path: sanitizedNumber);
+        print('Attempting to launch iOS dialer URI: $uri');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          print('Dialer opened successfully for $sanitizedNumber');
+        } else {
+          print('Cannot launch iOS dialer URI: $uri');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Unable to open dialer. Please ensure a phone app is installed.'),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e, stackTrace) {
+      print('Error opening dialer: $e\nStackTrace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error opening dialer: $e')),
         );
       }
     }
@@ -483,7 +579,10 @@ class _MyContactState extends State<MyContact> {
       builder: (context) => Dialpad(
         searchController: _searchController,
         onFilterContacts: _filterContacts,
-        onClose: () => Navigator.pop(context),
+        onClose: () {
+          Navigator.pop(context);
+          print('Dialpad closed, returning to MyContact');
+        },
       ),
       isScrollControlled: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -517,7 +616,7 @@ class _MyContactState extends State<MyContact> {
                 ),
                 const SizedBox(height: 16.0),
                 Text(
-                  'v 1.1',
+                  'v 1.2',
                   style: theme.textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 16.0),
@@ -536,15 +635,19 @@ class _MyContactState extends State<MyContact> {
     );
   }
 
-  Widget _buildBody() {
+  ({Widget body, bool showFab}) _buildBody() {
     final theme = Theme.of(context);
 
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return (
+      body: const Center(child: CircularProgressIndicator()),
+      showFab: false,
+      );
     }
 
     if (_errorMessage != null) {
-      return Center(
+      return (
+      body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -561,73 +664,154 @@ class _MyContactState extends State<MyContact> {
             ),
           ],
         ),
+      ),
+      showFab: false,
       );
     }
 
-    if (_contacts.isEmpty) {
-      return Center(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Transform.translate(
-                offset: const Offset(0.0, -20.0),
+    if (_contacts.isEmpty || (_searchController.text.isNotEmpty && _filteredContacts.isEmpty)) {
+      print('Rendering No contacts found state');
+      return (
+      body: Stack(
+        children: [
+          Container(
+            color: theme.brightness == Brightness.dark ? Colors.black : Colors.white,
+          ),
+          if (_contacts.isEmpty)
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topLeft,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Image.asset(
-                    'assets/images/no_contacts.png',
-                    width: 200.0,
-                    height: 200.0,
-                    fit: BoxFit.contain,
+                  padding: const EdgeInsets.all(8.0),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, size: 30.0, color: Colors.white),
+                    onPressed: () {
+                      print('Back arrow pressed');
+                      Navigator.pop(context);
+                    },
+                    tooltip: 'Back',
                   ),
                 ),
               ),
-              const SizedBox(height: 16.0),
-              Column(
-                children: [
-                  Text('No contacts found', style: theme.textTheme.bodyLarge),
-                  const SizedBox(height: 16.0),
-                  ElevatedButton(
-                    onPressed: _fetchContacts,
-                    child: const Text('Load Contacts'),
+            ),
+          Column(
+            children: [
+              if (_searchController.text.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search contacts',
+                      hintStyle: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.6)),
+                      prefixIcon: Icon(Icons.search, color: theme.colorScheme.onSurface),
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_searchController.text.isNotEmpty)
+                            IconButton(
+                              icon: Icon(Icons.clear, color: theme.colorScheme.onSurface),
+                              onPressed: () {
+                                _searchController.clear();
+                                _filterContacts();
+                              },
+                            ),
+                          IconButton(
+                            icon: Icon(Icons.person_add, color: theme.colorScheme.onSurface),
+                            onPressed: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => const AddContactPage()),
+                              );
+                              await _fetchContacts();
+                            },
+                          ),
+                        ],
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                        borderSide: BorderSide(color: theme.colorScheme.onSurface),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                        borderSide: BorderSide(color: theme.colorScheme.onSurface.withOpacity(0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                        borderSide: BorderSide(color: theme.colorScheme.primary, width: 2.0),
+                      ),
+                      filled: true,
+                      fillColor: theme.colorScheme.surface,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 16.0),
+                    ),
+                    style: theme.textTheme.bodyMedium,
+                    onChanged: (value) => _filterContacts(),
                   ),
-                ],
+                ),
+              Expanded(
+                child: Center(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Image.asset(
+                            'assets/images/no_contacts.png',
+                            width: 280,
+                            height: 280,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              print('Image load error: $error');
+                              return const Text(
+                                'Image not found',
+                                style: TextStyle(color: Colors.red),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 24.0),
+                        Text(
+                          'No contacts found',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontSize: 20.0,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16.0),
+                        if (_contacts.isEmpty)
+                          ElevatedButton(
+                            onPressed: _fetchContacts,
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+                              textStyle: const TextStyle(fontSize: 16.0),
+                            ),
+                            child: const Text('Load Contacts'),
+                          )
+                        else
+                          Text(
+                            'Try a different search term',
+                            style: theme.textTheme.bodyMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
-        ),
+        ],
+      ),
+      showFab: false,
       );
     }
 
     final displayContacts = _filteredContacts.isEmpty && _searchController.text.isEmpty
         ? _contacts
         : _filteredContacts;
-
-    if (_searchController.text.isNotEmpty && _filteredContacts.isEmpty) {
-      return Center(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Transform.translate(
-                offset: const Offset(0.0, -20.0),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Image.asset(
-                    'assets/images/no_contacts.png',
-                    width: 200.0,
-                    height: 200.0,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16.0),
-              Text('No contacts found', style: theme.textTheme.bodyLarge),
-            ],
-          ),
-        ),
-      );
-    }
 
     List<Widget> listItems = [];
     String? currentTag;
@@ -655,7 +839,7 @@ class _MyContactState extends State<MyContact> {
             color: Colors.green,
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.only(left: 16.0),
-            child: Icon(Icons.call, color: theme.colorScheme.onPrimary),
+            child: Icon(Icons.phone, color: theme.colorScheme.onPrimary),
           ),
           secondaryBackground: Container(
             color: theme.colorScheme.error,
@@ -665,8 +849,9 @@ class _MyContactState extends State<MyContact> {
           ),
           confirmDismiss: (direction) async {
             if (direction == DismissDirection.startToEnd) {
+              print('Swipe left detected for contact: ${contact.contact.displayName}');
               await _makeCall(contact);
-              return false; // Don't dismiss for call
+              return false; // Prevent dismissing the contact on swipe-to-call
             } else {
               return await _confirmDelete(contact.contact);
             }
@@ -678,6 +863,7 @@ class _MyContactState extends State<MyContact> {
           },
           child: SizedBox(
             height: _getContactHeight(),
+            width: double.infinity, // Ensure full width for swipe detection
             child: Padding(
               padding: _getContactPadding(),
               child: ListTile(
@@ -732,7 +918,8 @@ class _MyContactState extends State<MyContact> {
       );
     }
 
-    return Column(
+    return (
+    body: Column(
       children: [
         Padding(
           padding: const EdgeInsets.all(16.0),
@@ -742,15 +929,28 @@ class _MyContactState extends State<MyContact> {
               hintText: 'Search contacts',
               hintStyle: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.6)),
               prefixIcon: Icon(Icons.search, color: theme.colorScheme.onSurface),
-              suffixIcon: IconButton(
-                icon: Icon(Icons.person_add, color: theme.colorScheme.onSurface),
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const AddContactPage()),
-                  );
-                  await _fetchContacts();
-                },
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_searchController.text.isNotEmpty)
+                    IconButton(
+                      icon: Icon(Icons.clear, color: theme.colorScheme.onSurface),
+                      onPressed: () {
+                        _searchController.clear();
+                        _filterContacts();
+                      },
+                    ),
+                  IconButton(
+                    icon: Icon(Icons.person_add, color: theme.colorScheme.onSurface),
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const AddContactPage()),
+                      );
+                      await _fetchContacts();
+                    },
+                  ),
+                ],
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8.0),
@@ -849,15 +1049,17 @@ class _MyContactState extends State<MyContact> {
           ),
         ),
       ],
+    ),
+    showFab: true,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Builder(
-      builder: (BuildContext context) {
-        final themeProvider = Provider.of<ThemeProvider>(context);
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, _) {
         final theme = Theme.of(context);
+        final result = _buildBody();
 
         return Scaffold(
           appBar: AppBar(
@@ -870,10 +1072,12 @@ class _MyContactState extends State<MyContact> {
               ),
             ),
             backgroundColor: theme.colorScheme.primary,
+            automaticallyImplyLeading: !_contacts.isEmpty,
             actions: [
               PopupMenuButton<String>(
                 icon: Icon(Icons.sort, color: theme.colorScheme.onPrimary),
                 onSelected: (value) {
+                  print('PopupMenuButton selected: $value');
                   if (value == 'toggle_theme') {
                     themeProvider.toggleTheme(!themeProvider.isDarkMode);
                   } else if (value.startsWith('level')) {
@@ -885,69 +1089,71 @@ class _MyContactState extends State<MyContact> {
                     _setIndexBarColorMode(IndexBarColorMode.transparent);
                   } else if (value == 'multicolor_index_bar') {
                     _setIndexBarColorMode(IndexBarColorMode.multicolor);
-                  } else if (value == 'info') {
-                    _showInfoDialog();
                   } else if (value == 'toggle_index_bar') {
                     _toggleIndexBarVisibility();
+                  } else if (value == 'info') {
+                    _showInfoDialog();
                   }
                 },
                 constraints: const BoxConstraints(maxWidth: 300.0),
                 padding: EdgeInsets.zero,
                 itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'transparent_index_bar',
-                    height: 48.0,
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.opacity,
-                          color: _indexBarColorMode == IndexBarColorMode.transparent
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface,
-                          size: 22.0,
-                        ),
-                        const SizedBox(width: 8.0),
-                        Expanded(
-                          child: Text(
-                            'Transparent',
-                            style: TextStyle(
-                              fontSize: 16.0,
-                              color: _indexBarColorMode == IndexBarColorMode.transparent
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurface,
+                  if (_showIndexBar) ...[
+                    PopupMenuItem(
+                      value: 'transparent_index_bar',
+                      height: 48.0,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.opacity,
+                            color: _indexBarColorMode == IndexBarColorMode.transparent
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurface,
+                            size: 22.0,
+                          ),
+                          const SizedBox(width: 8.0),
+                          Expanded(
+                            child: Text(
+                              'Transparent',
+                              style: TextStyle(
+                                fontSize: 16.0,
+                                color: _indexBarColorMode == IndexBarColorMode.transparent
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurface,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: 'multicolor_index_bar',
-                    height: 48.0,
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.color_lens,
-                          color: _indexBarColorMode == IndexBarColorMode.multicolor
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurface,
-                          size: 22.0,
-                        ),
-                        const SizedBox(width: 8.0),
-                        Expanded(
-                          child: Text(
-                            'Multicolor',
-                            style: TextStyle(
-                              fontSize: 16.0,
-                              color: _indexBarColorMode == IndexBarColorMode.multicolor
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurface,
+                    PopupMenuItem(
+                      value: 'multicolor_index_bar',
+                      height: 48.0,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.color_lens,
+                            color: _indexBarColorMode == IndexBarColorMode.multicolor
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurface,
+                            size: 22.0,
+                          ),
+                          const SizedBox(width: 8.0),
+                          Expanded(
+                            child: Text(
+                              'Multicolor',
+                              style: TextStyle(
+                                fontSize: 16.0,
+                                color: _indexBarColorMode == IndexBarColorMode.multicolor
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurface,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                   PopupMenuItem(
                     value: 'toggle_index_bar',
                     height: 48.0,
@@ -997,7 +1203,7 @@ class _MyContactState extends State<MyContact> {
                     value: 'level1',
                     height: 48.0,
                     child: Text(
-                      'Display 1',
+                      'Level 1',
                       style: TextStyle(
                         fontSize: 16.0,
                         color: _displayLevel == ContactDisplayLevel.level1
@@ -1010,7 +1216,7 @@ class _MyContactState extends State<MyContact> {
                     value: 'level2',
                     height: 48.0,
                     child: Text(
-                      'Display 2',
+                      'Level 2',
                       style: TextStyle(
                         fontSize: 16.0,
                         color: _displayLevel == ContactDisplayLevel.level2
@@ -1023,7 +1229,7 @@ class _MyContactState extends State<MyContact> {
                     value: 'level3',
                     height: 48.0,
                     child: Text(
-                      'Display 3',
+                      'Level 3',
                       style: TextStyle(
                         fontSize: 16.0,
                         color: _displayLevel == ContactDisplayLevel.level3
@@ -1057,8 +1263,9 @@ class _MyContactState extends State<MyContact> {
               ),
             ],
           ),
-          body: _buildBody(),
-          floatingActionButton: Padding(
+          body: result.body,
+          floatingActionButton: result.showFab
+              ? Padding(
             padding: const EdgeInsets.only(bottom: 40.0, right: 40.0),
             child: Align(
               alignment: Alignment.bottomRight,
@@ -1067,11 +1274,11 @@ class _MyContactState extends State<MyContact> {
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: theme.colorScheme.onPrimary,
                 elevation: 6.0,
-                child: const Icon(Icons.dialpad, size: 30.0,),
+                child: const Icon(Icons.dialpad, size: 30.0),
               ),
             ),
-          ),
-          // floatingActionButtonLocation: CustomFabLocation(),
+          )
+              : null,
         );
       },
     );
