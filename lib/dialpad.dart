@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:android_intent_plus/android_intent.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'dart:io';
+import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:io' show Platform;
 
 class Dialpad extends StatefulWidget {
   final TextEditingController searchController;
@@ -50,10 +50,10 @@ class _DialpadState extends State<Dialpad> {
       return;
     }
 
-    // Sanitize to keep digits, +, -, (), and spaces
-    final sanitizedNumber = _dialedNumber.replaceAll(RegExp(r'[^\d+()\s-]'), '');
+    // Sanitize to keep digits and +
+    final sanitizedNumber = _dialedNumber.replaceAll(RegExp(r'[^\d+]'), '');
     // Minimal validation: at least 3 digits
-    if (sanitizedNumber.isEmpty || !RegExp(r'^\+?\d{3,}$').hasMatch(sanitizedNumber.replaceAll(RegExp(r'[()\s-]'), ''))) {
+    if (sanitizedNumber.isEmpty || !RegExp(r'^\+?\d{3,}$').hasMatch(sanitizedNumber)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Invalid phone number format: $sanitizedNumber')),
@@ -65,61 +65,40 @@ class _DialpadState extends State<Dialpad> {
 
     try {
       if (Platform.isAndroid) {
-        // Try AndroidIntent first
-        final intent = AndroidIntent(
-          action: 'android.intent.action.DIAL',
-          data: Uri(scheme: 'tel', path: sanitizedNumber).toString(),
-        );
-        print('Launching Android intent: action=DIAL, data=$sanitizedNumber');
-        try {
-          await intent.launch();
-          print('Dialer opened successfully with AndroidIntent for $sanitizedNumber');
-        } catch (e) {
-          print('AndroidIntent failed: $e');
-          // Fallback to url_launcher
-          final uri = Uri(scheme: 'tel', path: sanitizedNumber);
-          print('Falling back to url_launcher: $uri');
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-            print('Dialer opened successfully with url_launcher for $sanitizedNumber');
-          } else {
-            print('Cannot launch dialer URI: $uri');
+        // Request CALL_PHONE permission
+        var status = await Permission.phone.status;
+        if (!status.isGranted) {
+          status = await Permission.phone.request();
+          if (!status.isGranted) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Unable to open dialer. Please ensure a phone app is installed.'),
-                ),
+                const SnackBar(content: Text('Call permission denied')),
               );
             }
-          }
-        }
-      } else {
-        // iOS: Use url_launcher
-        final uri = Uri(scheme: 'tel', path: sanitizedNumber);
-        print('Attempting to launch iOS dialer URI: $uri');
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-          print('Dialer opened successfully for $sanitizedNumber');
-        } else {
-          print('Cannot launch iOS dialer URI: $uri');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Unable to open dialer. Please ensure a phone app is installed.'),
-              ),
-            );
+            print('Call permission denied for number: $sanitizedNumber');
+            return;
           }
         }
       }
-      // Call onClose to dismiss the dialpad after initiating the call
-      widget.onClose();
-    } catch (e, stackTrace) {
-      print('Error opening dialer: $e\nStackTrace: $stackTrace');
+
+      // Initiate direct call
+      final bool? callSuccess = await FlutterPhoneDirectCaller.callNumber(sanitizedNumber);
+      if (callSuccess != true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to initiate call')),
+        );
+        print('Failed to initiate call for number: $sanitizedNumber');
+      } else {
+        print('Call initiated successfully for $sanitizedNumber');
+        widget.onClose(); // Close dialpad after initiating call
+      }
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error opening dialer: $e')),
+          SnackBar(content: Text('Error initiating call: $e')),
         );
       }
+      print('Error initiating call: $e');
     }
   }
 

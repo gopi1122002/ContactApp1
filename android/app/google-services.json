@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "367348845694",
+    "project_id": "mdq-c-23ed2",
+    "storage_bucket": "mdq-c-23ed2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:367348845694:android:f6c8f5d7b6f90b48e65c2f",
+        "android_client_info": {
+          "package_name": "com.example.listdemo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjUnaa0eXkj_gbhNEVFDMrnYqHc5bLwRI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
